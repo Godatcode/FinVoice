@@ -4,7 +4,7 @@ import { ThemeProvider } from './context/ThemeProvider';
 import { ProfileSettingsProvider } from './context/ProfileSettingsContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 import { LanguageProvider } from './context/LanguageContext';
-import i18n from './i18n';
+import i18n from './i18n.js';
 import { I18nextProvider } from 'react-i18next';
 import { AuthProvider } from './context/AuthContext';
 
