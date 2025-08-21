@@ -98,7 +98,7 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName={isLoggedIn ? 'Main' : 'Login'}>
+      <Stack.Navigator initialRouteName={'Main'}>
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Main" component={TabNavigator} options={{ headerShown: false }} />
           <Stack.Screen name="AIAssistant" component={AIAssistantScreen} options={{ headerShown: false }} />
