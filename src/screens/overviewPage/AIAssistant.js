@@ -45,7 +45,7 @@ const AIAssistantScreen = () => {
 
     const greetings = ['hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening'];
     if (greetings.includes(query.toLowerCase().trim())) {
-      let aiWelcomeMessageContent = `Welcome to Fortura AI! How can I help you with your personal finances today?`;
+      let aiWelcomeMessageContent = `Welcome to FinVoice AI! How can I help you with your personal finances today?`;
       if (language === 'or') {
         aiWelcomeMessageContent += ' ଓଡ଼ିଆରେ ଉତ୍ତର ଦିଅନ୍ତୁ।';
       } else if (language === 'hi') {
@@ -65,7 +65,7 @@ const AIAssistantScreen = () => {
     }
 
     setLoading(true);
-    let engineeredPrompt = `You are Fortura AI, a helpful personal finance assistant. Please answer the following question clearly and concisely: ${query}`;
+    let engineeredPrompt = `You are FinVoice AI, a helpful personal finance assistant. Please answer the following question clearly and concisely: ${query}`;
 
     if (language === 'or') {
       engineeredPrompt = `ଓଡ଼ିଆରେ ଉତ୍ତର ଦିଅନ୍ତୁ। ${engineeredPrompt}`;
@@ -134,7 +134,7 @@ const AIAssistantScreen = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}>
         <View style={styles.header}>
-          <Text style={styles.headerText}>Fortura AI</Text>
+          <Text style={styles.headerText}>FinVoice AI</Text>
           <Text style={styles.subHeader}>{t('fa')}</Text>
         </View>
 
