@@ -1,5 +1,5 @@
 import {useState, useEffect, useContext} from 'react';
-import {StyleSheet,View,Text,ScrollView,TouchableOpacity,Platform,Dimensions} from 'react-native';
+import {StyleSheet,View,Text,ScrollView,TouchableOpacity,Platform,Dimensions, TextInput} from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import {Card} from '../../components/Card';
 import {BarChart} from 'react-native-chart-kit';
@@ -12,7 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 const OverviewScreen = () => {
   const {user} = useContext(UserContext);
   const {selectedCurrencySign} = useCurrency();  
-  const {text, primary, background, success, warning, error,card} = useThemeColor();
+  const {text, primary, background, success, warning, warningLight,card} = useThemeColor();
   const {t} = useTranslation();
   const screenWidth = Dimensions.get('window').width;
   const navigation = useNavigation();
@@ -97,11 +97,19 @@ const OverviewScreen = () => {
               styles.aiAlert,
               {borderColor: warning},
             ]}>
-            <Text style={[styles.aiAlertText, {color: warning}]}>
-              Add Expenses
-            </Text>
+            <TextInput 
+            style={[styles.aiAlertText, {color: warning}]}
+            placeholder='Add Expenses...'
+            placeholderTextColor={warningLight}
+            >
+            </TextInput>
             <MaterialCommunityIcons
               name="microphone-outline"
+              size={20}
+              color={warning}
+            />
+            <MaterialCommunityIcons
+              name="google-lens"
               size={20}
               color={warning}
             />

@@ -18,6 +18,7 @@ export const ThemeProvider = ({ children }) => {
       notification: '#FF7675',
       success: '#00B894',
       warning: '#FDCB6E',
+      warningLight: '#7d7c79ff',
       error: '#FF7675',
       }
     : {
@@ -30,6 +31,7 @@ export const ThemeProvider = ({ children }) => {
         notification: '#FF7675',
         success: '#00B894',
         warning: '#FDCB6E',
+        warningLight: '#7d7c79ff',
         error: '#FF7675',
       };
 
