@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "930887042922",
+    "project_id": "finvoice-40a92",
+    "storage_bucket": "finvoice-40a92.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:930887042922:android:1039e2dda5dcac4dbd4713",
+        "android_client_info": {
+          "package_name": "com.finvoice"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjn0an-QWopNZIXFeYs0iDba6gy2fzbRM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

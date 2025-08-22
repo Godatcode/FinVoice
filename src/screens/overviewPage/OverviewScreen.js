@@ -58,7 +58,7 @@ const OverviewScreen = () => {
       </View>
 
       <Card style={styles.balanceCard}>
-        <Text style={[styles.balanceLabel, {color: text}]}>{t('Total Balance')}</Text>
+        <Text style={[styles.balanceLabel, {color: text}]}>{t('Total Spent')}</Text>
         <Text style={[styles.balanceAmount, {color: text}]}>{selectedCurrencySign}84,532.00</Text>
         <Text style={[styles.trend, {color: success}]}>
           ↑ {t('up')}
@@ -76,18 +76,13 @@ const OverviewScreen = () => {
       </Card>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, {color: text}]}>
-            {t('cashflow')}
-          </Text>
-        </View>
 
         <Card>
           <View style={{ padding: 16 }}>
-            <Text style={{ fontSize: 18, marginBottom: 10, fontWeight: 'bold' , color: text }}>{t('monthlyexpenses')}</Text>
+            <Text style={{ fontSize: 18, marginBottom: 5, fontWeight: 'bold' , color: text }}>{t('monthlyexpenses')}</Text>
             <BarChart
             data={data}
-            height={220}
+            height={200}
             width={screenWidth}
             chartConfig={chartConfig}
             style={{
@@ -96,21 +91,21 @@ const OverviewScreen = () => {
              }}
             />
           </View>
-          <View
+        </Card>
+        <View
             style={[
               styles.aiAlert,
-              {backgroundColor: warning + '20', borderColor: warning},
+              {borderColor: warning},
             ]}>
+            <Text style={[styles.aiAlertText, {color: warning}]}>
+              Add Expenses
+            </Text>
             <MaterialCommunityIcons
-              name="alert-circle"
+              name="microphone-outline"
               size={20}
               color={warning}
             />
-            <Text style={[styles.aiAlertText, {color: warning}]}>
-              {t('cashflowdip')}
-            </Text>
           </View>
-        </Card>
       </View>
 
       <View style={styles.section}>

@@ -18,7 +18,7 @@ import { getAuth, signInWithPhoneNumber } from '@react-native-firebase/auth';
 import { useThemeColor } from '../../context/ThemeProvider';
 import { UserContext } from '../../context/UserContext';
 import { useTranslation } from 'react-i18next';
-import Logo from '../../assets/fortura.png';
+import Logo from '../../assets/finvoice.png';
 import { AuthContext } from '../../context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
