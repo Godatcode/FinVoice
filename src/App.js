@@ -7,6 +7,7 @@ import { LanguageProvider } from './context/LanguageContext';
 import i18n from './i18n.js';
 import { I18nextProvider } from 'react-i18next';
 import { AuthProvider } from './context/AuthContext';
+import { ExpenseProvider } from './context/ExpenseContext';
 
 export default function App() {
   return (
@@ -17,7 +18,9 @@ export default function App() {
             <ThemeProvider>
               <UserProvider>
                 <CurrencyProvider>
-                  <AppNavigator />
+                  <ExpenseProvider>
+                    <AppNavigator />
+                  </ExpenseProvider>
                 </CurrencyProvider> 
               </UserProvider>
             </ThemeProvider>

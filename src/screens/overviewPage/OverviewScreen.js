@@ -1,13 +1,16 @@
 import {useState, useEffect, useContext} from 'react';
-import {StyleSheet,View,Text,ScrollView,TouchableOpacity,Platform,Dimensions, TextInput} from 'react-native';
+import {StyleSheet,View,Text,ScrollView,TouchableOpacity,Platform,Dimensions,TextInput,Alert} from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import {Card} from '../../components/Card';
 import {BarChart} from 'react-native-chart-kit';
 import { UserContext } from '../../context/UserContext';
 import { useThemeColor } from '../../context/ThemeProvider';
 import { useCurrency } from '../../context/CurrencyContext';
+import { useExpenses } from '../../context/ExpenseContext';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
+import VoiceRecorder from '../../components/VoiceRecorder';
+import ExpenseList from '../../components/ExpenseList';
 
 const OverviewScreen = () => {
   const {user} = useContext(UserContext);
@@ -16,6 +19,18 @@ const OverviewScreen = () => {
   const {t} = useTranslation();
   const screenWidth = Dimensions.get('window').width;
   const navigation = useNavigation();
+  const { addExpense, parseVoiceInput, getTotalExpenses, expenses } = useExpenses();
+  const [totalSpent, setTotalSpent] = useState('84,532.00');
+
+  // Add error boundary for context
+  if (!addExpense || !parseVoiceInput || !getTotalExpenses) {
+    console.error('Expense context not properly initialized');
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
 
   const data = {
     labels: ['Jan' , 'Feb' , 'March', 'Apr'],
@@ -42,6 +57,53 @@ const OverviewScreen = () => {
     navigation.navigate('Invest');
   };
 
+  const handleVoiceInput = async (voiceText) => {
+    try {
+      const parsedExpense = parseVoiceInput(voiceText);
+      
+      if (!parsedExpense.isValid) {
+        Alert.alert(
+          'Invalid Input',
+          'Please try again with a clear amount and description. Example: "Add dinner 7300"',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      const newExpense = await addExpense({
+        amount: parsedExpense.amount,
+        description: parsedExpense.description,
+        category: parsedExpense.category,
+        voiceInput: voiceText
+      });
+
+      // Update total spent display
+      const newTotal = getTotalExpenses();
+      setTotalSpent(newTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 }));
+
+      Alert.alert(
+        'Expense Added!',
+        `${parsedExpense.description} - ${selectedCurrencySign}${parsedExpense.amount} added to ${parsedExpense.category}`,
+        [{ text: 'OK' }]
+      );
+
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      Alert.alert('Error', 'Failed to add expense. Please try again.');
+    }
+  };
+
+  const handleVoiceError = (error) => {
+    console.error('Voice recognition error:', error);
+    Alert.alert('Voice Error', 'Failed to recognize speech. Please try again.');
+  };
+
+  useEffect(() => {
+    // Update total spent when expenses change
+    const newTotal = getTotalExpenses();
+    setTotalSpent(newTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 }));
+  }, [expenses]);
+
   return (
     <ScrollView style={[styles.container, {backgroundColor: background}]}>
       <View style={styles.header}>
@@ -59,7 +121,7 @@ const OverviewScreen = () => {
 
       <Card style={styles.balanceCard}>
         <Text style={[styles.balanceLabel, {color: text}]}>{t('Total Spent')}</Text>
-        <Text style={[styles.balanceAmount, {color: text}]}>{selectedCurrencySign}84,532.00</Text>
+        <Text style={[styles.balanceAmount, {color: text}]}>{selectedCurrencySign}{totalSpent}</Text>
         <Text style={[styles.trend, {color: success}]}>
           ↑ {t('up')}
         </Text>
@@ -101,20 +163,23 @@ const OverviewScreen = () => {
             style={[styles.aiAlertText, {color: warning}]}
             placeholder='Add Expenses...'
             placeholderTextColor={warningLight}
-            >
-            </TextInput>
-            <MaterialCommunityIcons
-              name="microphone-outline"
-              size={20}
-              color={warning}
             />
-            <MaterialCommunityIcons
-              name="google-lens"
-              size={20}
-              color={warning}
+            <VoiceRecorder
+              onVoiceResult={handleVoiceInput}
+              onError={handleVoiceError}
+              iconSize={20}
             />
+            <TouchableOpacity style={styles.cameraButton}>
+              <MaterialCommunityIcons
+                name="google-lens"
+                size={20}
+                color={warning}
+              />
+            </TouchableOpacity>
           </View>
       </View>
+
+      <ExpenseList maxItems={3} />
 
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, {color: text}]}>
@@ -216,6 +281,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   actionButtonText: {color: 'white', fontSize: 14, fontWeight: '600'},
+  cameraButton: {
+    padding: 8,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 export default OverviewScreen;
