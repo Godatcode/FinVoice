@@ -1,5 +1,5 @@
 import {useState, useEffect, useContext} from 'react';
-import {StyleSheet,View,Text,ScrollView,TouchableOpacity,Platform,Dimensions,TextInput,Alert} from 'react-native';
+import {StyleSheet,View,Text,ScrollView,TouchableOpacity,Platform,Dimensions,TextInput,Alert,RefreshControl} from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import {Card} from '../../components/Card';
 import {BarChart} from 'react-native-chart-kit';
@@ -25,11 +25,12 @@ const OverviewScreen = () => {
   const {language} = useLanguage();
   const screenWidth = Dimensions.get('window').width;
   const navigation = useNavigation();
-  const { addExpense, parseVoiceInput, getTotalExpenses, expenses } = useExpenses();
+  const { addExpense, parseVoiceInput, getTotalExpenses, expenses, refreshExpenses } = useExpenses();
   const [totalSpent, setTotalSpent] = useState('84,532.00');
   const [showNotification, setShowNotification] = useState(false);
   const [lastAddedExpense, setLastAddedExpense] = useState(null);
   const [addExpenseModalVisible, setAddExpenseModalVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Add error boundary for context
   if (!addExpense || !parseVoiceInput || !getTotalExpenses) {
@@ -95,6 +96,20 @@ const OverviewScreen = () => {
     console.error('Voice input error:', error);
     ttsService.voiceError('general');
     Alert.alert('Voice Error', 'Failed to process voice input. Please try again.');
+  };
+
+  const handleRefresh = async () => {
+    if (!isLocalUser()) {
+      setRefreshing(true);
+      try {
+        await refreshExpenses();
+        console.log('✅ Expenses refreshed successfully');
+      } catch (error) {
+        console.error('❌ Error refreshing expenses:', error);
+      } finally {
+        setRefreshing(false);
+      }
+    }
   };
 
   const handleVoiceInput = async (voiceText) => {
@@ -193,6 +208,18 @@ const OverviewScreen = () => {
     setData(generateChartData());
   }, [expenses]);
 
+  // Refresh expenses when screen comes into focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (!isLocalUser()) {
+        console.log('🔄 Screen focused, refreshing expenses...');
+        handleRefresh();
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, isLocalUser]);
+
   return (
     <View style={[styles.container, {backgroundColor: background}]}>
       {/* Real-time notification */}
@@ -203,7 +230,18 @@ const OverviewScreen = () => {
         currencySign={selectedCurrencySign}
       />
       
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            enabled={!isLocalUser()}
+            colors={[primary]}
+            tintColor={primary}
+          />
+        }
+      >
       <View style={styles.header}>
         <View>
           <Text style={[styles.greeting, {color: text}]}>{t('welcomeback')},</Text>

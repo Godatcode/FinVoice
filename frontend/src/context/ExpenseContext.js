@@ -27,8 +27,16 @@ export const ExpenseProvider = ({ children }) => {
   ];
 
   useEffect(() => {
-    loadExpenses();
-  }, []);
+    // Load expenses when user changes or component mounts
+    if (user && user.id && !user.id.startsWith('local_')) {
+      console.log('🔄 User authenticated, loading expenses for:', user.id);
+      loadExpenses();
+    } else {
+      console.log('⏸️ No valid user, clearing expenses');
+      setExpenses([]);
+      setLoading(false);
+    }
+  }, [user]); // Add user as dependency
 
   const loadExpenses = async () => {
     try {
@@ -163,6 +171,16 @@ export const ExpenseProvider = ({ children }) => {
       const expenseDate = new Date(expense.date);
       return expenseDate >= startDate && expenseDate <= endDate;
     });
+  };
+
+  // Manual refresh function for expenses
+  const refreshExpenses = async () => {
+    if (user && user.id && !user.id.startsWith('local_')) {
+      console.log('🔄 Manually refreshing expenses for user:', user.id);
+      await loadExpenses();
+    } else {
+      console.log('⏸️ Cannot refresh expenses - no valid user');
+    }
   };
 
   const getTotalExpenses = () => {
@@ -305,6 +323,7 @@ export const ExpenseProvider = ({ children }) => {
     getCategoryTotals,
     parseVoiceInput,
     selectedCurrencySign,
+    refreshExpenses,
     // Helper functions for UI
     formatExpenseDate: (dateString) => {
       const date = new Date(dateString);

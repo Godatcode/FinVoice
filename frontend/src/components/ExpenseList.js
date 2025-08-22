@@ -15,7 +15,7 @@ import EditExpenseModal from './EditExpenseModal';
 import ttsService from '../services/TTSService';
 
 const ExpenseList = ({ maxItems = 5, onExpensePress, onAddExpensePress }) => {
-  const { expenses, defaultCategories, selectedCurrencySign, updateExpense, deleteExpense, getCategoryInfo, formatExpenseDate } = useExpenses();
+  const { expenses, loading, defaultCategories, selectedCurrencySign, updateExpense, deleteExpense, getCategoryInfo, formatExpenseDate } = useExpenses();
   const { text, background, primary, secondary, card, error, success } = useThemeColor();
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState(null);
