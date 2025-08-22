@@ -4,6 +4,7 @@ import { BarChart } from 'react-native-chart-kit';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ttsService from '../../services/TTSService';
 
 const BUDGET_STORAGE_KEY = 'userBudgetData';
 
@@ -108,8 +109,12 @@ export default function BudgetScreen() {
     setBudgetData(prev => ({ ...prev, categories: updatedCategories }));
   };
 
-  const handleSaveBudget = () => {
+  const handleSaveBudget = async () => {
     saveBudget(budgetData);
+    
+    // TTS feedback
+    await ttsService.speak('Budget saved successfully. Navigating to insights.');
+    
     navigation.navigate('Insights', { budgetData });
   };
 

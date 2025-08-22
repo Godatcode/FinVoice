@@ -1,19 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Alert,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Card } from './Card';
 import { useThemeColor } from '../context/ThemeProvider';
 import { useExpenses } from '../context/ExpenseContext';
+import EditExpenseModal from './EditExpenseModal';
+import ttsService from '../services/TTSService';
 
 const ExpenseList = ({ maxItems = 5, onExpensePress }) => {
-  const { expenses, defaultCategories, selectedCurrencySign } = useExpenses();
-  const { text, background, primary, secondary, card } = useThemeColor();
+  const { expenses, defaultCategories, selectedCurrencySign, updateExpense, deleteExpense, getCategoryInfo, formatExpenseDate } = useExpenses();
+  const { text, background, primary, secondary, card, error, success } = useThemeColor();
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState(null);
 
   // Add error boundary for context
   if (!expenses || !defaultCategories || !selectedCurrencySign) {
@@ -30,24 +35,31 @@ const ExpenseList = ({ maxItems = 5, onExpensePress }) => {
     );
   }
 
-  const getCategoryInfo = (categoryId) => {
-    return defaultCategories.find(cat => cat.id === categoryId) || {
-      name: 'Other',
-      icon: 'help-circle',
-      color: secondary
-    };
+  const handleEditExpense = (expense) => {
+    setSelectedExpense(expense);
+    setEditModalVisible(true);
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 1) return 'Today';
-    if (diffDays === 2) return 'Yesterday';
-    if (diffDays <= 7) return `${diffDays - 1} days ago`;
-    return date.toLocaleDateString();
+  const handleDeleteExpense = async (expense) => {
+    Alert.alert(
+      'Delete Expense',
+      `Are you sure you want to delete "${expense.description}" (${selectedCurrencySign}${expense.amount})?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteExpense(expense.id);
+            await ttsService.speak(`Expense deleted successfully. ${expense.description} removed.`);
+          }
+        }
+      ]
+    );
+  };
+
+  const handleSaveExpense = async (updatedExpense) => {
+    await updateExpense(updatedExpense.id, updatedExpense);
   };
 
   const recentExpenses = expenses.slice(0, maxItems);
@@ -88,44 +100,78 @@ const ExpenseList = ({ maxItems = 5, onExpensePress }) => {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContainer}
       >
-        {recentExpenses.map((expense) => {
-          const categoryInfo = getCategoryInfo(expense.category);
-          
-          return (
-            <TouchableOpacity
-              key={expense.id}
-              style={styles.expenseCard}
-              onPress={() => onExpensePress && onExpensePress(expense)}
-            >
-              <View style={styles.expenseHeader}>
-                <View style={[styles.categoryIcon, { backgroundColor: categoryInfo.color + '20' }]}>
-                  <MaterialCommunityIcons
-                    name={categoryInfo.icon}
-                    size={20}
-                    color={categoryInfo.color}
-                  />
-                </View>
-                <Text style={[styles.expenseAmount, { color: text }]}>
-                  {selectedCurrencySign}{expense.amount}
-                </Text>
-              </View>
-              
-              <Text style={[styles.expenseDescription, { color: text }]} numberOfLines={2}>
-                {expense.description}
-              </Text>
-              
-              <View style={styles.expenseFooter}>
-                <Text style={[styles.categoryName, { color: secondary }]}>
-                  {categoryInfo.name}
-                </Text>
-                <Text style={[styles.expenseDate, { color: secondary }]}>
-                  {formatDate(expense.date)}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+                       {recentExpenses.map((expense) => {
+                 const categoryInfo = getCategoryInfo(expense.category);
+                 
+                 return (
+                   <View key={expense.id} style={styles.expenseCard}>
+                     <TouchableOpacity
+                       style={styles.expenseContent}
+                       onPress={() => onExpensePress && onExpensePress(expense)}
+                     >
+                       <View style={styles.expenseHeader}>
+                         <View style={[styles.categoryIcon, { backgroundColor: categoryInfo.color + '20' }]}>
+                           <MaterialCommunityIcons
+                             name={categoryInfo.icon}
+                             size={20}
+                             color={categoryInfo.color}
+                           />
+                         </View>
+                         <Text style={[styles.expenseAmount, { color: text }]}>
+                           {selectedCurrencySign}{expense.amount}
+                         </Text>
+                       </View>
+                       
+                       <Text style={[styles.expenseDescription, { color: text }]} numberOfLines={2}>
+                         {expense.description}
+                       </Text>
+                       
+                       <View style={styles.expenseFooter}>
+                         <Text style={[styles.categoryName, { color: secondary }]}>
+                           {categoryInfo.name}
+                         </Text>
+                         <Text style={[styles.expenseDate, { color: secondary }]}>
+                           {formatExpenseDate(expense.date)}
+                         </Text>
+                       </View>
+                     </TouchableOpacity>
+                     
+                     {/* Action Buttons */}
+                     <View style={styles.expenseActions}>
+                       <TouchableOpacity
+                         style={[styles.actionButton, { backgroundColor: primary + '20' }]}
+                         onPress={() => handleEditExpense(expense)}
+                       >
+                         <MaterialCommunityIcons
+                           name="pencil"
+                           size={16}
+                           color={primary}
+                         />
+                       </TouchableOpacity>
+                       
+                       <TouchableOpacity
+                         style={[styles.actionButton, { backgroundColor: error + '20' }]}
+                         onPress={() => handleDeleteExpense(expense)}
+                       >
+                         <MaterialCommunityIcons
+                           name="delete"
+                           size={16}
+                           color={error}
+                         />
+                       </TouchableOpacity>
+                     </View>
+                   </View>
+                 );
+               })}
       </ScrollView>
+      
+      {/* Edit Expense Modal */}
+      <EditExpenseModal
+        visible={editModalVisible}
+        expense={selectedExpense}
+        onClose={() => setEditModalVisible(false)}
+        onSave={handleSaveExpense}
+      />
     </View>
   );
 };
@@ -153,16 +199,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   expenseCard: {
-    width: 160,
+    width: 180,
     backgroundColor: '#333',
     borderRadius: 16,
-    padding: 16,
     marginRight: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  expenseContent: {
+    padding: 16,
+  },
+  expenseActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   expenseHeader: {
     flexDirection: 'row',

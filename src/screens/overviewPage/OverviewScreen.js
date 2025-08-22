@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import VoiceRecorder from '../../components/VoiceRecorder';
 import ExpenseList from '../../components/ExpenseList';
+import ttsService from '../../services/TTSService';
+import ExpenseNotification from '../../components/ExpenseNotification';
 
 const OverviewScreen = () => {
   const {user} = useContext(UserContext);
@@ -21,6 +23,8 @@ const OverviewScreen = () => {
   const navigation = useNavigation();
   const { addExpense, parseVoiceInput, getTotalExpenses, expenses } = useExpenses();
   const [totalSpent, setTotalSpent] = useState('84,532.00');
+  const [showNotification, setShowNotification] = useState(false);
+  const [lastAddedExpense, setLastAddedExpense] = useState(null);
 
   // Add error boundary for context
   if (!addExpense || !parseVoiceInput || !getTotalExpenses) {
@@ -32,12 +36,37 @@ const OverviewScreen = () => {
     );
   }
 
-  const data = {
-    labels: ['Jan' , 'Feb' , 'March', 'Apr'],
-    datasets:[
-      {data: [20000,45000,28000,80000],}
-    ]
+  // Generate real-time chart data from expenses
+  const generateChartData = () => {
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    // Get last 4 months of data
+    const months = [];
+    const data = [];
+    
+    for (let i = 3; i >= 0; i--) {
+      const month = (currentMonth - i + 12) % 12;
+      const year = currentMonth - i < 0 ? currentYear - 1 : currentYear;
+      
+      const monthExpenses = expenses.filter(expense => {
+        const expenseDate = new Date(expense.date);
+        return expenseDate.getMonth() === month && expenseDate.getFullYear() === year;
+      });
+      
+      const total = monthExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
+      
+      months.push(new Date(year, month).toLocaleDateString('en-US', { month: 'short' }));
+      data.push(total);
+    }
+    
+    return {
+      labels: months,
+      datasets: [{ data }]
+    };
   };
+
+  const [data, setData] = useState(generateChartData());
 
   const chartConfig = {
     backgroundColor: card,
@@ -57,11 +86,18 @@ const OverviewScreen = () => {
     navigation.navigate('Invest');
   };
 
+  const handleVoiceError = (error) => {
+    console.error('Voice input error:', error);
+    ttsService.voiceError('general');
+    Alert.alert('Voice Error', 'Failed to process voice input. Please try again.');
+  };
+
   const handleVoiceInput = async (voiceText) => {
     try {
       const parsedExpense = parseVoiceInput(voiceText);
       
       if (!parsedExpense.isValid) {
+        ttsService.voiceError('invalid_input');
         Alert.alert(
           'Invalid Input',
           'Please try again with a clear amount and description. Example: "Add dinner 7300"',
@@ -81,31 +117,61 @@ const OverviewScreen = () => {
       const newTotal = getTotalExpenses();
       setTotalSpent(newTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 }));
 
+      // Voice confirmation
+      await ttsService.confirmExpense({
+        description: parsedExpense.description,
+        amount: parsedExpense.amount,
+        category: parsedExpense.category
+      });
+
+      // Show notification
+      setLastAddedExpense(newExpense);
+      setShowNotification(true);
+
+      // Show success feedback
       Alert.alert(
-        'Expense Added!',
-        `${parsedExpense.description} - ${selectedCurrencySign}${parsedExpense.amount} added to ${parsedExpense.category}`,
-        [{ text: 'OK' }]
+        'Expense Added Successfully!',
+        `${parsedExpense.description}\n${selectedCurrencySign}${parsedExpense.amount}\nCategory: ${parsedExpense.category}`,
+        [{ 
+          text: 'OK',
+          onPress: () => {
+            // Announce new total after alert is dismissed
+            setTimeout(() => {
+              ttsService.announceTotal(newTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 }));
+            }, 500);
+          }
+        }]
       );
 
     } catch (error) {
       console.error('Error adding expense:', error);
+      ttsService.voiceError('general');
       Alert.alert('Error', 'Failed to add expense. Please try again.');
     }
   };
 
-  const handleVoiceError = (error) => {
-    console.error('Voice recognition error:', error);
-    Alert.alert('Voice Error', 'Failed to recognize speech. Please try again.');
-  };
+
 
   useEffect(() => {
     // Update total spent when expenses change
     const newTotal = getTotalExpenses();
     setTotalSpent(newTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 }));
+    
+    // Force chart re-render when expenses change
+    setData(generateChartData());
   }, [expenses]);
 
   return (
-    <ScrollView style={[styles.container, {backgroundColor: background}]}>
+    <View style={[styles.container, {backgroundColor: background}]}>
+      {/* Real-time notification */}
+      <ExpenseNotification
+        visible={showNotification}
+        expense={lastAddedExpense}
+        onClose={() => setShowNotification(false)}
+        currencySign={selectedCurrencySign}
+      />
+      
+      <ScrollView showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <View>
           <Text style={[styles.greeting, {color: text}]}>{t('welcomeback')},</Text>
@@ -133,6 +199,18 @@ const OverviewScreen = () => {
           />
           <Text style={[styles.aiInsightText, {color: success}]}>
             {t('positivecashflow')}
+          </Text>
+        </View>
+        
+        {/* Real-time expense counter */}
+        <View style={styles.expenseCounter}>
+          <MaterialCommunityIcons
+            name="chart-line"
+            size={16}
+            color={primary}
+          />
+          <Text style={[styles.expenseCounterText, {color: primary}]}>
+            {expenses.length} expenses tracked
           </Text>
         </View>
       </Card>
@@ -207,7 +285,8 @@ const OverviewScreen = () => {
           </TouchableOpacity>
         </Card>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
@@ -245,6 +324,21 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   aiInsightText: {fontSize: 14, fontWeight: '500'},
+  expenseCounter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(108, 92, 231, 0.1)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  expenseCounterText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
   section: {padding: 24, paddingTop: 0},
   sectionHeader: {
     flexDirection: 'row',

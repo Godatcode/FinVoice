@@ -2,6 +2,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 import en from './locales/en.json';
+import mar from './locales/mar.json';
 import hi from './locales/hi.json';
 import bn from './locales/bn.json';
 import pa from './locales/pa.json';
@@ -14,6 +15,7 @@ i18n.use(initReactI18next).init({
   fallbackLng: 'en',
   resources: {
     en: { translation: en },
+    mar: { translation: mar },
     hi: { translation: hi },
     bn: { translation: bn },
     pa: { translation: pa },

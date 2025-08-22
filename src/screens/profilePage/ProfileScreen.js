@@ -6,6 +6,8 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { UserContext } from '../../context/UserContext';
 import {useTranslation} from 'react-i18next'
 import { AuthContext } from '../../context/AuthContext';
+import TTSSettings from '../../components/TTSSettings';
+import { ScrollView } from 'react-native-gesture-handler';
 
 const ProfileScreen = ({ navigation}) => {
   const {user} = useContext(UserContext);
@@ -46,7 +48,7 @@ const ProfileScreen = ({ navigation}) => {
   };
 
   return (
-    <View style={[styles.container , { backgroundColor: background }]}>
+    <ScrollView style={[styles.container , { backgroundColor: background }]}>
         <View style={styles.header}>
           <Image
             source={{
@@ -110,6 +112,11 @@ const ProfileScreen = ({ navigation}) => {
             </View>
 
             <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: text }]}>Voice & Accessibility</Text>
+              <TTSSettings />
+            </View>
+
+            <View style={styles.section}>
               <TouchableOpacity
                 style={[styles.logoutButton, { backgroundColor: card }]}
                 onPress={() => handleMenuPress('logout')}>
@@ -125,7 +132,7 @@ const ProfileScreen = ({ navigation}) => {
             <Text style={[styles.logoutText, { color: primary }]}>{t('login')}</Text>
           </TouchableOpacity>
         )}
-    </View>
+    </ScrollView>
   );
 };
 

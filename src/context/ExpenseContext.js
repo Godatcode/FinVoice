@@ -115,40 +115,105 @@ export const ExpenseProvider = ({ children }) => {
   };
 
   const parseVoiceInput = (voiceText) => {
-    // Basic parsing logic - can be enhanced with Gemini AI
+    // Enhanced parsing logic for voice input
     const text = voiceText.toLowerCase();
     
-    // Extract amount (look for numbers)
-    const amountMatch = text.match(/(\d+(?:\.\d{2})?)/);
-    const amount = amountMatch ? parseFloat(amountMatch[1]) : null;
+    // Extract amount (look for numbers with currency context)
+    const amountPatterns = [
+      /(\d+(?:\.\d{2})?)\s*(?:rupees?|rs|₹|inr)/i,
+      /(\d+(?:\.\d{2})?)\s*(?:dollars?|\$|usd)/i,
+      /(\d+(?:\.\d{2})?)\s*(?:euros?|€|eur)/i,
+      /(\d+(?:\.\d{2})?)/  // fallback to any number
+    ];
     
-    // Extract category based on keywords
+    let amount = null;
+    for (const pattern of amountPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        amount = parseFloat(match[1]);
+        break;
+      }
+    }
+    
+    // Extract category based on enhanced keywords
     let category = 'other';
     let description = voiceText;
     
-    if (text.includes('food') || text.includes('dinner') || text.includes('lunch') || text.includes('breakfast') || text.includes('restaurant')) {
+    // Food & Dining
+    if (text.includes('food') || text.includes('dinner') || text.includes('lunch') || 
+        text.includes('breakfast') || text.includes('restaurant') || text.includes('meal') ||
+        text.includes('coffee') || text.includes('snack') || text.includes('pizza') ||
+        text.includes('burger') || text.includes('chicken') || text.includes('rice')) {
       category = 'foodDining';
-    } else if (text.includes('transport') || text.includes('uber') || text.includes('taxi') || text.includes('fuel') || text.includes('gas')) {
+    }
+    // Transportation
+    else if (text.includes('transport') || text.includes('uber') || text.includes('taxi') || 
+             text.includes('fuel') || text.includes('gas') || text.includes('petrol') ||
+             text.includes('bus') || text.includes('train') || text.includes('metro') ||
+             text.includes('parking') || text.includes('toll')) {
       category = 'transportation';
-    } else if (text.includes('movie') || text.includes('entertainment') || text.includes('game') || text.includes('concert')) {
+    }
+    // Entertainment
+    else if (text.includes('movie') || text.includes('entertainment') || text.includes('game') || 
+             text.includes('concert') || text.includes('show') || text.includes('theater') ||
+             text.includes('party') || text.includes('outing') || text.includes('fun')) {
       category = 'entertainment';
-    } else if (text.includes('bill') || text.includes('electricity') || text.includes('water') || text.includes('internet')) {
+    }
+    // Utilities
+    else if (text.includes('bill') || text.includes('electricity') || text.includes('water') || 
+             text.includes('internet') || text.includes('phone') || text.includes('mobile') ||
+             text.includes('gas bill') || text.includes('maintenance')) {
       category = 'utilities';
-    } else if (text.includes('shopping') || text.includes('clothes') || text.includes('book') || text.includes('grocery')) {
+    }
+    // Shopping
+    else if (text.includes('shopping') || text.includes('clothes') || text.includes('book') || 
+             text.includes('grocery') || text.includes('store') || text.includes('mall') ||
+             text.includes('shirt') || text.includes('pants') || text.includes('shoes')) {
       category = 'shopping';
-    } else if (text.includes('doctor') || text.includes('medicine') || text.includes('health') || text.includes('medical')) {
+    }
+    // Healthcare
+    else if (text.includes('doctor') || text.includes('medicine') || text.includes('health') || 
+             text.includes('medical') || text.includes('hospital') || text.includes('pharmacy') ||
+             text.includes('medicine') || text.includes('treatment')) {
       category = 'healthcare';
-    } else if (text.includes('course') || text.includes('book') || text.includes('education') || text.includes('training')) {
+    }
+    // Education
+    else if (text.includes('course') || text.includes('book') || text.includes('education') || 
+             text.includes('training') || text.includes('school') || text.includes('college') ||
+             text.includes('university') || text.includes('study')) {
       category = 'education';
-    } else if (text.includes('travel') || text.includes('flight') || text.includes('hotel') || text.includes('vacation')) {
+    }
+    // Travel
+    else if (text.includes('travel') || text.includes('flight') || text.includes('hotel') || 
+             text.includes('vacation') || text.includes('trip') || text.includes('journey') ||
+             text.includes('booking') || text.includes('reservation')) {
       category = 'travel';
+    }
+    
+    // Clean up description (remove amount and common words)
+    let cleanDescription = voiceText;
+    if (amount) {
+      cleanDescription = voiceText.replace(new RegExp(`${amount}\\s*(?:rupees?|rs|₹|inr|dollars?|\\$|usd|euros?|€|eur)?`, 'gi'), '').trim();
+    }
+    
+    // Remove common filler words
+    const fillerWords = ['add', 'expense', 'for', 'of', 'the', 'a', 'an', 'and', 'or', 'but'];
+    cleanDescription = cleanDescription
+      .split(' ')
+      .filter(word => !fillerWords.includes(word.toLowerCase()))
+      .join(' ')
+      .trim();
+    
+    // If description is empty after cleaning, use original
+    if (!cleanDescription) {
+      cleanDescription = voiceText;
     }
     
     return {
       amount,
-      description: voiceText,
+      description: cleanDescription || voiceText,
       category,
-      isValid: amount !== null
+      isValid: amount !== null && cleanDescription.length > 0
     };
   };
 
@@ -166,6 +231,25 @@ export const ExpenseProvider = ({ children }) => {
     getCategoryTotals,
     parseVoiceInput,
     selectedCurrencySign,
+    // Helper functions for UI
+    formatExpenseDate: (dateString) => {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffTime = Math.abs(now - date);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 1) return 'Today';
+      if (diffDays === 2) return 'Yesterday';
+      if (diffDays <= 7) return `${diffDays - 1} days ago`;
+      return date.toLocaleDateString();
+    },
+    getCategoryInfo: (categoryId) => {
+      return defaultCategories.find(cat => cat.id === categoryId) || {
+        name: 'Other',
+        icon: 'help-circle',
+        color: '#6B46C1'
+      };
+    }
   };
 
   return (

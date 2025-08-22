@@ -33,6 +33,10 @@
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>FinVoice needs access to your microphone to record voice input for expense logging.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>FinVoice uses speech recognition to convert your voice input into text for expense logging.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

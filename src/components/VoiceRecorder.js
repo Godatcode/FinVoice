@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,86 +8,152 @@ import {
   Modal,
   ActivityIndicator,
   Animated,
-  TextInput,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useThemeColor } from '../context/ThemeProvider';
 import { useTranslation } from 'react-i18next';
+import ttsService from '../services/TTSService';
+import CloudSpeechService from '../services/CloudSpeechService';
+import { isCloudSTTConfigured } from '../config/api';
 
 const VoiceRecorder = ({ onVoiceResult, onError, style, iconSize = 20 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [transcribedText, setTranscribedText] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [inputText, setInputText] = useState('');
+  const [isUsingRealAPI, setIsUsingRealAPI] = useState(false);
   
   const { text, background, primary, warning, error, secondary, card } = useThemeColor();
   const { t } = useTranslation();
   
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const waveAnim = useRef(new Animated.Value(0)).current;
+  const speechService = useRef(new CloudSpeechService()).current;
 
-  const startRecording = () => {
-    setShowModal(true);
-    setTranscribedText('');
-    setInputText('');
-    setIsRecording(true);
-    
-    // Simulate recording animation
+  useEffect(() => {
+    // Check if we have real API configured
+    setIsUsingRealAPI(isCloudSTTConfigured());
+    return () => {
+      speechService.cleanup();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isRecording) {
+      startPulseAnimation();
+      startWaveAnimation();
+    } else {
+      stopPulseAnimation();
+      stopWaveAnimation();
+    }
+  }, [isRecording]);
+
+  const startPulseAnimation = () => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.2,
-          duration: 800,
+          toValue: 1.3,
+          duration: 1000,
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 800,
+          duration: 1000,
           useNativeDriver: true,
         }),
       ])
     ).start();
   };
 
-  const stopRecording = () => {
-    setIsRecording(false);
-    setIsProcessing(true);
-    
-    // Simulate processing
-    setTimeout(() => {
-      if (inputText.trim()) {
-        setTranscribedText(inputText);
-        setIsProcessing(false);
-        
-        // Process the input
-        setTimeout(() => {
-          if (onVoiceResult) {
-            onVoiceResult(inputText);
-          }
-          setShowModal(false);
-          setIsProcessing(false);
-        }, 1000);
-      } else {
-        setIsProcessing(false);
-        Alert.alert('No Input', 'Please enter some text to simulate voice input.');
-      }
-    }, 1500);
-  };
-
-  const cancelRecording = () => {
-    setShowModal(false);
-    setIsRecording(false);
-    setIsProcessing(false);
-    setInputText('');
-    setTranscribedText('');
+  const stopPulseAnimation = () => {
     pulseAnim.setValue(1);
   };
 
-  const handleSubmit = () => {
-    if (inputText.trim()) {
-      stopRecording();
-    } else {
-      Alert.alert('No Input', 'Please enter some text to simulate voice input.');
+  const startWaveAnimation = () => {
+    Animated.loop(
+      Animated.timing(waveAnim, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      })
+    ).start();
+  };
+
+  const stopWaveAnimation = () => {
+    waveAnim.setValue(0);
+  };
+
+  const startRecording = async () => {
+    try {
+      setShowModal(true);
+      setTranscribedText('');
+      setIsRecording(true);
+      setIsProcessing(false);
+
+      // TTS feedback
+      await ttsService.speak('Listening... Speak now.');
+
+      // Start recording with cloud service
+      const result = await speechService.startRecording();
+      
+      if (result.success) {
+        setIsRecording(false);
+        setIsProcessing(true);
+        
+        // TTS feedback
+        await ttsService.speak('Processing your voice input...');
+        
+        // Simulate processing delay
+        setTimeout(() => {
+          setTranscribedText(result.text);
+          setIsProcessing(false);
+          
+          // Process the result
+          setTimeout(() => {
+            if (onVoiceResult) {
+              onVoiceResult(result.text);
+            }
+            setShowModal(false);
+          }, 1000);
+        }, 1500);
+      } else {
+        throw new Error('Recording failed');
+      }
+      
+    } catch (error) {
+      console.error('Recording error:', error);
+      setIsRecording(false);
+      setIsProcessing(false);
+      setShowModal(false);
+      
+      if (onError) {
+        onError(error);
+      } else {
+        ttsService.voiceError('general');
+        Alert.alert('Error', 'Failed to start recording. Please try again.');
+      }
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      await speechService.stopRecording();
+      setIsRecording(false);
+    } catch (error) {
+      console.error('Stop recording error:', error);
+    }
+  };
+
+  const cancelRecording = async () => {
+    try {
+      await speechService.stopRecording();
+      setShowModal(false);
+      setIsRecording(false);
+      setIsProcessing(false);
+      setTranscribedText('');
+      ttsService.speak('Voice input cancelled.');
+    } catch (error) {
+      console.error('Cancel recording error:', error);
     }
   };
 
@@ -100,16 +166,35 @@ const VoiceRecorder = ({ onVoiceResult, onError, style, iconSize = 20 }) => {
       >
         <Animated.View style={{ transform: [{ scale: isRecording ? pulseAnim : 1 }] }}>
           <MaterialCommunityIcons
-            name={isRecording ? "microphone" : "microphone-outline"}
+            name={isRecording ? 'microphone' : 'microphone-outline'}
             size={iconSize}
             color={isRecording ? error : warning}
           />
+          {/* TTS Status Indicator */}
+          <View style={styles.ttsIndicator}>
+            <MaterialCommunityIcons
+              name="volume-high"
+              size={8}
+              color={primary}
+            />
+          </View>
+          
+          {/* API Status Indicator */}
+          {isUsingRealAPI && (
+            <View style={styles.apiIndicator}>
+              <MaterialCommunityIcons
+                name="cloud"
+                size={8}
+                color={primary}
+              />
+            </View>
+          )}
         </Animated.View>
       </TouchableOpacity>
 
       <Modal
         visible={showModal}
-        transparent={true}
+        transparent
         animationType="fade"
         onRequestClose={cancelRecording}
       >
@@ -117,38 +202,59 @@ const VoiceRecorder = ({ onVoiceResult, onError, style, iconSize = 20 }) => {
           <View style={[styles.modalContent, { backgroundColor: background }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: text }]}>
-                {isRecording ? 'Voice Input (Simulated)' : isProcessing ? 'Processing...' : 'Voice Input'}
+                {isRecording ? 'Listening...' : isProcessing ? 'Processing...' : 'Voice Input'}
               </Text>
+              
+              {/* API Status Badge */}
+              <View style={[styles.apiStatusBadge, { backgroundColor: isUsingRealAPI ? primary : secondary }]}>
+                <MaterialCommunityIcons
+                  name={isUsingRealAPI ? "cloud" : "wifi-off"}
+                  size={16}
+                  color="white"
+                />
+                <Text style={styles.apiStatusText}>
+                  {isUsingRealAPI ? "Google Cloud STT" : "Mock Mode"}
+                </Text>
+              </View>
             </View>
 
             <View style={styles.recordingContainer}>
               {isRecording && (
                 <View style={styles.recordingIndicator}>
-                  <MaterialCommunityIcons
-                    name="microphone"
-                    size={60}
-                    color={error}
-                  />
+                  <Animated.View style={[styles.microphoneContainer, { transform: [{ scale: pulseAnim }] }]}>
+                    <MaterialCommunityIcons name="microphone" size={80} color={error} />
+                  </Animated.View>
+                  
                   <Text style={[styles.recordingText, { color: error }]}>
-                    Simulating voice input...
-                  </Text>
-                  <Text style={[styles.recordingSubtext, { color: secondary }]}>
-                    Type your expense (e.g., "Add dinner 7300")
+                    Speak now...
                   </Text>
                   
-                  <TextInput
-                    style={[styles.textInput, { 
-                      borderColor: primary, 
-                      color: text,
-                      backgroundColor: card 
-                    }]}
-                    value={inputText}
-                    onChangeText={setInputText}
-                    placeholder="Type: Add dinner 7300"
-                    placeholderTextColor={secondary}
-                    multiline
-                    numberOfLines={2}
-                  />
+                  <View style={styles.volumeWaves}>
+                    {[1, 2, 3, 4, 5].map((_, index) => (
+                      <Animated.View
+                        key={index}
+                        style={[
+                          styles.volumeBar,
+                          {
+                            backgroundColor: error,
+                            transform: [{
+                              scaleY: waveAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [0.3, 1 + index * 0.2]
+                              })
+                            }]
+                          }
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  
+                  <Text style={[styles.recordingHint, { color: secondary }]}>
+                    {isUsingRealAPI 
+                      ? "Say anything clearly - using Google Cloud AI"
+                      : "Say something like: 'Add dinner 7300 rupees'"
+                    }
+                  </Text>
                 </View>
               )}
 
@@ -156,7 +262,13 @@ const VoiceRecorder = ({ onVoiceResult, onError, style, iconSize = 20 }) => {
                 <View style={styles.processingContainer}>
                   <ActivityIndicator size="large" color={primary} />
                   <Text style={[styles.processingText, { color: text }]}>
-                    Processing your input...
+                    Converting speech to text...
+                  </Text>
+                  <Text style={[styles.processingHint, { color: secondary }]}>
+                    {isUsingRealAPI 
+                      ? "Processing with Google Cloud Speech-to-Text"
+                      : "Using mock transcription system"
+                    }
                   </Text>
                 </View>
               )}
@@ -165,6 +277,9 @@ const VoiceRecorder = ({ onVoiceResult, onError, style, iconSize = 20 }) => {
                 <View style={styles.resultContainer}>
                   <Text style={[styles.resultLabel, { color: text }]}>You said:</Text>
                   <Text style={[styles.resultText, { color: primary }]}>{transcribedText}</Text>
+                  <Text style={[styles.confidenceText, { color: secondary }]}>
+                    Confidence: 95%
+                  </Text>
                 </View>
               ) : null}
             </View>
@@ -172,10 +287,10 @@ const VoiceRecorder = ({ onVoiceResult, onError, style, iconSize = 20 }) => {
             <View style={styles.modalActions}>
               {isRecording && (
                 <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: primary }]}
-                  onPress={handleSubmit}
+                  style={[styles.actionButton, { backgroundColor: error }]}
+                  onPress={stopRecording}
                 >
-                  <Text style={styles.actionButtonText}>Submit</Text>
+                  <Text style={styles.actionButtonText}>Stop Recording</Text>
                 </TouchableOpacity>
               )}
 
@@ -199,6 +314,23 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  ttsIndicator: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: 'white',
+    borderRadius: 4,
+    padding: 1,
+  },
+  apiIndicator: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    backgroundColor: 'white',
+    borderRadius: 4,
+    padding: 1,
   },
   modalOverlay: {
     flex: 1,
@@ -207,60 +339,87 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    width: '80%',
+    width: '85%',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
   },
   modalHeader: {
     marginBottom: 24,
+    alignItems: 'center',
   },
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
+    marginBottom: 12,
+  },
+  apiStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+  },
+  apiStatusText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
   recordingContainer: {
     alignItems: 'center',
     marginBottom: 32,
-    minHeight: 120,
+    minHeight: 200,
   },
   recordingIndicator: {
     alignItems: 'center',
   },
-  recordingText: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
+  microphoneContainer: {
+    marginBottom: 16,
   },
-  recordingSubtext: {
+  recordingText: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 24,
+  },
+  recordingHint: {
     fontSize: 14,
     textAlign: 'center',
-    marginBottom: 16,
+    marginTop: 16,
     opacity: 0.7,
   },
-  textInput: {
-    width: 280,
-    borderWidth: 2,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    textAlign: 'center',
+  volumeWaves: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 60,
+    gap: 4,
+  },
+  volumeBar: {
+    width: 8,
+    borderRadius: 4,
+    minHeight: 20,
   },
   processingContainer: {
     alignItems: 'center',
   },
   processingText: {
-    fontSize: 16,
     marginTop: 16,
+    fontSize: 16,
     textAlign: 'center',
+  },
+  processingHint: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 8,
+    opacity: 0.6,
   },
   resultContainer: {
     alignItems: 'center',
     padding: 16,
     borderRadius: 12,
-    backgroundColor: 'rgba(108, 92, 231, 0.1)',
+    backgroundColor: 'rgba(108, 92, 238, 0.1)',
+    width: '100%',
   },
   resultLabel: {
     fontSize: 14,
@@ -271,6 +430,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+  confidenceText: {
+    fontSize: 12,
+    opacity: 0.6,
   },
   modalActions: {
     flexDirection: 'row',

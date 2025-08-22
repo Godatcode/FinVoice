@@ -19,6 +19,7 @@ export default function LanguageSettings() {
 
   const langs = [
     {code: 'en', labelKey: 'English', icon: 'web'},
+    {code: 'mar', labelKey: 'मराठी', icon: 'translate'},
     {code: 'hi', labelKey: 'हिन्दी', icon: 'translate'},
     {code: 'bn', labelKey: 'বাংলা', icon: 'translate'},
     {code: 'pa', labelKey: 'ਪੰਜਾਬੀ', icon: 'translate'},
