@@ -25,7 +25,7 @@ if (process.env.FIREBASE_PROJECT_ID) {
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:8081'], // React Native dev server
+  origin: true, // Allow all origins for mobile app
   credentials: true
 }));
 app.use(helmet());
