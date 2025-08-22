@@ -1,26 +1,47 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { StyleSheet, View, Text, Switch, Button, Platform, Linking, Alert } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '../../context/ThemeProvider';
 import { useTranslation } from 'react-i18next';
+import { profileAPI } from '../../services/apiService';
+import { UserContext } from '../../context/UserContext';
 
 const NotificationSettingsScreen = () => {
     const {primary,background , text} = useThemeColor();
     const {t} = useTranslation();
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+    const { user } = useContext(UserContext);
     
     useEffect(() => {
-        const loadToggleState = async () => {
-        const value = await AsyncStorage.getItem('notificationsEnabled');
-        if (value !== null) setNotificationsEnabled(value === 'true');
+        const loadNotificationSettingsFromSupabase = async () => {
+            try {
+                if (user && user.id) {
+                    const profile = await profileAPI.getProfile();
+                    if (profile && profile.notifications_enabled !== undefined) {
+                        setNotificationsEnabled(profile.notifications_enabled);
+                    }
+                }
+            } catch (error) {
+                console.log('Error loading notification settings from Supabase:', error);
+            }
         };
-        loadToggleState();
-    }, []);
+        
+        loadNotificationSettingsFromSupabase();
+    }, [user]);
     
     const toggleSwitch = async () => {
         const newValue = !notificationsEnabled;
         setNotificationsEnabled(newValue);
-        await AsyncStorage.setItem('notificationsEnabled', newValue.toString());
+        
+        try {
+            if (user && user.id) {
+                await profileAPI.updateProfile({ notifications_enabled: newValue });
+            }
+        } catch (error) {
+            console.error('Error saving notification settings to Supabase:', error);
+            // Revert the state if save failed
+            setNotificationsEnabled(!newValue);
+            Alert.alert('Error', 'Failed to save notification preference. Please try again.');
+        }
     };
     
     const openNotificationSettings = () => {

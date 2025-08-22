@@ -97,25 +97,9 @@ const VoiceRecorder = ({ onVoiceResult, onError, style, iconSize = 20 }) => {
       const result = await speechService.startRecording();
       
       if (result.success) {
-        setIsRecording(false);
-        setIsProcessing(true);
-        
-        // TTS feedback
-        await ttsService.speak('Processing your voice input...');
-        
-        // Simulate processing delay
-        setTimeout(() => {
-          setTranscribedText(result.text);
-          setIsProcessing(false);
-          
-          // Process the result
-          setTimeout(() => {
-            if (onVoiceResult) {
-              onVoiceResult(result.text);
-            }
-            setShowModal(false);
-          }, 1000);
-        }, 1500);
+        // Keep recording state active - user needs to stop manually
+        console.log('✅ Recording started successfully');
+        console.log('📁 Recording path:', result.message);
       } else {
         throw new Error('Recording failed');
       }
@@ -126,21 +110,120 @@ const VoiceRecorder = ({ onVoiceResult, onError, style, iconSize = 20 }) => {
       setIsProcessing(false);
       setShowModal(false);
       
+      // Show user-friendly error message
+      let errorMessage = 'Failed to start recording. Please try again.';
+      
+      if (error.message.includes('Voice recording not available')) {
+        errorMessage = 'Voice recording is not available. Please enter expense manually or try again later.';
+      } else if (error.message.includes('permission denied')) {
+        errorMessage = 'Microphone permission denied. Please enable microphone access in settings.';
+      }
+      
       if (onError) {
         onError(error);
       } else {
         ttsService.voiceError('general');
-        Alert.alert('Error', 'Failed to start recording. Please try again.');
+        Alert.alert('Voice Recording', errorMessage);
       }
     }
   };
 
   const stopRecording = async () => {
     try {
-      await speechService.stopRecording();
-      setIsRecording(false);
+      setIsProcessing(true);
+      
+      // TTS feedback
+      await ttsService.speak('Processing your voice input...');
+      
+      // Stop recording and get transcription
+      const result = await speechService.stopRecording();
+      
+      if (result.success) {
+        setIsRecording(false);
+        setIsProcessing(false);
+        
+        // Check if this is a fallback result
+        if (result.isFallback) {
+          setTranscribedText(result.text);
+          
+          if (result.requiresManualInput) {
+            // Show enhanced fallback message with manual input option
+            setTimeout(() => {
+              setShowModal(false);
+              Alert.alert(
+                'Voice Recording Unavailable', 
+                'Voice recording is not available on this device. Would you like to enter your expense manually?',
+                [
+                  { 
+                    text: 'Enter Manually', 
+                    onPress: () => {
+                      // Trigger manual expense input
+                      if (onVoiceResult) {
+                        onVoiceResult('MANUAL_INPUT_REQUESTED');
+                      }
+                    }
+                  },
+                  { text: 'Cancel', onPress: () => setShowModal(false) }
+                ]
+              );
+            }, 2000);
+          } else {
+            // Show regular fallback message
+            setTimeout(() => {
+              setShowModal(false);
+              Alert.alert(
+                'Voice Recording', 
+                'Voice recording is not fully available. Please enter your expense manually or try again later.',
+                [
+                  { text: 'Enter Manually', onPress: () => setShowModal(false) },
+                  { text: 'Try Again', onPress: () => setShowModal(false) }
+                ]
+              );
+            }, 3000);
+          }
+          
+          // TTS feedback for fallback
+          await ttsService.speak('Please enter expense manually');
+        } else {
+          // Show transcription result
+          setTranscribedText(result.text);
+          
+          // Process the result after a short delay
+          setTimeout(() => {
+            if (onVoiceResult) {
+              onVoiceResult(result.text);
+            }
+            setShowModal(false);
+          }, 2000);
+          
+          // TTS confirmation
+          await ttsService.speak(`Processed: ${result.text}`);
+        }
+        
+      } else {
+        throw new Error('Failed to process recording');
+      }
+      
     } catch (error) {
       console.error('Stop recording error:', error);
+      setIsRecording(false);
+      setIsProcessing(false);
+      
+      // Show user-friendly error message
+      let errorMessage = 'Failed to process voice input. Please try again.';
+      
+      if (error.message.includes('Voice recording not available')) {
+        errorMessage = 'Voice recording is not available. Please enter expense manually or try again later.';
+      } else if (error.message.includes('permission denied')) {
+        errorMessage = 'Microphone permission denied. Please enable microphone access in settings.';
+      }
+      
+      if (onError) {
+        onError(error);
+      } else {
+        ttsService.voiceError('general');
+        Alert.alert('Voice Processing', errorMessage);
+      }
     }
   };
 
@@ -170,25 +253,6 @@ const VoiceRecorder = ({ onVoiceResult, onError, style, iconSize = 20 }) => {
             size={iconSize}
             color={isRecording ? error : warning}
           />
-          {/* TTS Status Indicator */}
-          <View style={styles.ttsIndicator}>
-            <MaterialCommunityIcons
-              name="volume-high"
-              size={8}
-              color={primary}
-            />
-          </View>
-          
-          {/* API Status Indicator */}
-          {isUsingRealAPI && (
-            <View style={styles.apiIndicator}>
-              <MaterialCommunityIcons
-                name="cloud"
-                size={8}
-                color={primary}
-              />
-            </View>
-          )}
         </Animated.View>
       </TouchableOpacity>
 
@@ -251,7 +315,7 @@ const VoiceRecorder = ({ onVoiceResult, onError, style, iconSize = 20 }) => {
                   
                   <Text style={[styles.recordingHint, { color: secondary }]}>
                     {isUsingRealAPI 
-                      ? "Say anything clearly - using Google Cloud AI"
+                      ? "Speak clearly - tap Stop when done"
                       : "Say something like: 'Add dinner 7300 rupees'"
                     }
                   </Text>
@@ -285,7 +349,7 @@ const VoiceRecorder = ({ onVoiceResult, onError, style, iconSize = 20 }) => {
             </View>
 
             <View style={styles.modalActions}>
-              {isRecording && (
+              {isRecording && !isProcessing && (
                 <TouchableOpacity
                   style={[styles.actionButton, { backgroundColor: error }]}
                   onPress={stopRecording}
@@ -294,12 +358,14 @@ const VoiceRecorder = ({ onVoiceResult, onError, style, iconSize = 20 }) => {
                 </TouchableOpacity>
               )}
 
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: warning }]}
-                onPress={cancelRecording}
-              >
-                <Text style={styles.actionButtonText}>Cancel</Text>
-              </TouchableOpacity>
+              {!isRecording && !isProcessing && (
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: warning }]}
+                  onPress={cancelRecording}
+                >
+                  <Text style={styles.actionButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -314,23 +380,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
-  },
-  ttsIndicator: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: 'white',
-    borderRadius: 4,
-    padding: 1,
-  },
-  apiIndicator: {
-    position: 'absolute',
-    top: 2,
-    left: 2,
-    backgroundColor: 'white',
-    borderRadius: 4,
-    padding: 1,
   },
   modalOverlay: {
     flex: 1,

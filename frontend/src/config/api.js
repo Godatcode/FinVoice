@@ -1,11 +1,20 @@
-// API Configuration
-// Replace these with your actual API keys when ready for production
+// Frontend API Configuration
+// This file contains configuration for frontend services only
+// Backend handles all database operations via Supabase
+
 import { GOOGLE_CLOUD_STT_API_KEY } from '@env';
 
+// Debug: Check if environment variables are loaded
+console.log('🔧 Environment Variables Debug:');
+console.log('  - GOOGLE_CLOUD_STT_API_KEY:', GOOGLE_CLOUD_STT_API_KEY ? '✅ Loaded' : '❌ Not loaded');
+
 export const API_CONFIG = {
-  // Google Cloud Speech-to-Text API Key
-  // Get this from: https://console.cloud.google.com/apis/credentials
+  // Backend API Configuration
+  // All data operations go through the backend server
+  BACKEND_URL: 'http://20.20.11.235:5001', // Your actual IP address (updated port)
   
+  // Google Cloud Speech-to-Text API Key (for voice features)
+  GOOGLE_CLOUD_STT_API_KEY: GOOGLE_CLOUD_STT_API_KEY,
   
   // Google Cloud Speech-to-Text API Endpoint
   GOOGLE_CLOUD_STT_ENDPOINT: 'https://speech.googleapis.com/v1/speech:recognize',
@@ -35,10 +44,10 @@ export const API_CONFIG = {
   FORCE_MOCK_MODE: false, // Set to true to force mock mode for testing
 };
 
-// Helper function to get API key
+// Helper function to get Google Cloud API key
 export const getGoogleCloudAPIKey = () => {
   const key = API_CONFIG.GOOGLE_CLOUD_STT_API_KEY;
-  if (key === 'YOUR_GOOGLE_CLOUD_API_KEY_HERE') {
+  if (!key || key === 'your_google_cloud_api_key_here') {
     console.warn('⚠️ Google Cloud API key not configured. Using mock transcription.');
     return null;
   }
@@ -58,9 +67,9 @@ export const isCloudSTTConfigured = () => {
 export const logApiStatus = () => {
   if (API_CONFIG.DEBUG_MODE) {
     console.log('🔧 API Debug Info:');
-    console.log('  - API Key configured:', !!getGoogleCloudAPIKey());
+    console.log('  - Backend URL:', API_CONFIG.BACKEND_URL);
+    console.log('  - Google API Key configured:', !!getGoogleCloudAPIKey());
     console.log('  - Force mock mode:', API_CONFIG.FORCE_MOCK_MODE);
     console.log('  - Using real API:', isCloudSTTConfigured());
-    console.log('  - Endpoint:', API_CONFIG.GOOGLE_CLOUD_STT_ENDPOINT);
   }
 };

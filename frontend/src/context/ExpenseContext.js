@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
+import { expenseAPI } from '../services/apiService';
+import { UserContext } from './UserContext';
 
 const ExpenseContext = createContext();
 
@@ -9,6 +10,7 @@ export const ExpenseProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [selectedCurrencySign, setSelectedCurrencySign] = useState('₹'); // Default to INR
   const { t } = useTranslation();
+  const { user } = useContext(UserContext);
 
   console.log('ExpenseProvider initialized with:', { selectedCurrencySign, loading });
 
@@ -28,56 +30,128 @@ export const ExpenseProvider = ({ children }) => {
     loadExpenses();
   }, []);
 
-  // For now, use static default to avoid circular dependency
-  // We can sync with currency context later when needed
-
   const loadExpenses = async () => {
     try {
-      const storedExpenses = await AsyncStorage.getItem('expenses');
-      if (storedExpenses) {
-        setExpenses(JSON.parse(storedExpenses));
+      // Only load expenses if user is authenticated with valid UUID
+      if (user && user.id && !user.id.startsWith('local_')) {
+        try {
+          const data = await expenseAPI.getAll();
+          setExpenses(data || []);
+        } catch (apiError) {
+          console.error('Failed to load expenses from backend API:', apiError);
+          setExpenses([]);
+        }
+      } else {
+        // No user ID, no expenses to load
+        setExpenses([]);
       }
     } catch (error) {
       console.error('Error loading expenses:', error);
+      setExpenses([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const saveExpenses = async (newExpenses) => {
+  const addExpense = async (expenseData) => {
+    console.log('🔍 Current user context:', user);
+    console.log('🔍 User ID:', user?.id);
+    console.log('🔍 User object keys:', Object.keys(user || {}));
+    
+    const newExpense = {
+      ...expenseData,
+      user_id: user?.id, // Add user ID for backend API
+      date: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
+
     try {
-      await AsyncStorage.setItem('expenses', JSON.stringify(newExpenses));
+      // Save to backend API (only if user is authenticated with valid UUID)
+      if (user && user.id && !user.id.startsWith('local_')) {
+        try {
+          console.log('🔄 Sending expense data to backend:', newExpense);
+          const savedExpense = await expenseAPI.create(newExpense);
+          console.log('✅ Backend response for expense:', savedExpense);
+          console.log('✅ Response type:', typeof savedExpense);
+          console.log('✅ Response keys:', Object.keys(savedExpense || {}));
+          
+          if (!savedExpense || !savedExpense.id) {
+            console.error('❌ Invalid response from backend - missing expense ID');
+            throw new Error('Invalid response from backend - missing expense ID');
+          }
+          
+          const updatedExpenses = [savedExpense, ...expenses];
+          setExpenses(updatedExpenses);
+          return savedExpense;
+        } catch (apiError) {
+          console.error('Failed to save expense to backend API:', apiError);
+          throw new Error('Failed to save expense. Please try again.');
+        }
+      } else {
+        console.error('❌ User authentication check failed:');
+        console.error('   - user exists:', !!user);
+        console.error('   - user.id exists:', !!user?.id);
+        console.error('   - user object:', user);
+        
+        if (user?.id?.startsWith('local_')) {
+          throw new Error('You are in offline mode. Please log in again to sync with the server and add expenses.');
+        } else {
+          throw new Error('User not authenticated. Please log in.');
+        }
+      }
     } catch (error) {
-      console.error('Error saving expenses:', error);
+      console.error('Error adding expense:', error);
+      throw error;
     }
   };
 
-  const addExpense = async (expenseData) => {
-    const newExpense = {
-      id: Date.now().toString(),
-      ...expenseData,
-      date: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    };
-
-    const updatedExpenses = [newExpense, ...expenses];
-    setExpenses(updatedExpenses);
-    await saveExpenses(updatedExpenses);
-    return newExpense;
-  };
-
   const updateExpense = async (expenseId, updates) => {
-    const updatedExpenses = expenses.map(expense =>
-      expense.id === expenseId ? { ...expense, ...updates, updatedAt: new Date().toISOString() } : expense
-    );
-    setExpenses(updatedExpenses);
-    await saveExpenses(updatedExpenses);
+    try {
+      // Update in backend API (only if user is authenticated with valid UUID)
+      if (!user || !user.id || user.id.startsWith('local_')) {
+        throw new Error('User not authenticated with valid backend profile. Please log in.');
+      }
+      
+      try {
+        const updatedExpense = await expenseAPI.update(expenseId, {
+          ...updates,
+          updated_at: new Date().toISOString()
+        });
+        
+        const updatedExpenses = expenses.map(expense =>
+          expense.id === expenseId ? updatedExpense : expense
+        );
+        setExpenses(updatedExpenses);
+      } catch (apiError) {
+        console.error('Failed to update expense in backend API:', apiError);
+        throw new Error('Failed to update expense. Please try again.');
+        }
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      throw error;
+    }
   };
 
   const deleteExpense = async (expenseId) => {
-    const updatedExpenses = expenses.filter(expense => expense.id !== expenseId);
-    setExpenses(updatedExpenses);
-    await saveExpenses(updatedExpenses);
+    try {
+      // Delete from backend API (only if user is authenticated with valid UUID)
+      if (!user || !user.id || user.id.startsWith('local_')) {
+        throw new Error('User not authenticated with valid backend profile. Please log in.');
+      }
+      
+      try {
+        await expenseAPI.delete(expenseId);
+        
+        const updatedExpenses = expenses.filter(expense => expense.id !== expenseId);
+        setExpenses(updatedExpenses);
+      } catch (apiError) {
+        console.error('Failed to delete expense from backend API:', apiError);
+        throw new Error('Failed to delete expense. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      throw error;
+    }
   };
 
   const getExpensesByCategory = (categoryId) => {

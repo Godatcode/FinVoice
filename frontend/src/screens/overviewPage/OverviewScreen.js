@@ -11,20 +11,25 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import VoiceRecorder from '../../components/VoiceRecorder';
 import ExpenseList from '../../components/ExpenseList';
+import AddExpenseModal from '../../components/AddExpenseModal';
 import ttsService from '../../services/TTSService';
 import ExpenseNotification from '../../components/ExpenseNotification';
+import { voiceAPI } from '../../services/apiService';
+import { useLanguage } from '../../context/LanguageContext';
 
 const OverviewScreen = () => {
-  const {user} = useContext(UserContext);
+  const {user, isLocalUser} = useContext(UserContext);
   const {selectedCurrencySign} = useCurrency();  
   const {text, primary, background, success, warning, warningLight,card} = useThemeColor();
   const {t} = useTranslation();
+  const {language} = useLanguage();
   const screenWidth = Dimensions.get('window').width;
   const navigation = useNavigation();
   const { addExpense, parseVoiceInput, getTotalExpenses, expenses } = useExpenses();
   const [totalSpent, setTotalSpent] = useState('84,532.00');
   const [showNotification, setShowNotification] = useState(false);
   const [lastAddedExpense, setLastAddedExpense] = useState(null);
+  const [addExpenseModalVisible, setAddExpenseModalVisible] = useState(false);
 
   // Add error boundary for context
   if (!addExpense || !parseVoiceInput || !getTotalExpenses) {
@@ -94,7 +99,34 @@ const OverviewScreen = () => {
 
   const handleVoiceInput = async (voiceText) => {
     try {
-      const parsedExpense = parseVoiceInput(voiceText);
+      console.log('🎤 Processing voice input:', voiceText);
+      
+      // Check if this is a manual input request
+      if (voiceText === 'MANUAL_INPUT_REQUESTED') {
+        console.log('📝 Manual input requested, opening expense modal');
+        setAddExpenseModalVisible(true);
+        return;
+      }
+      
+      // Try to use backend voice processing first
+      let parsedExpense;
+      try {
+        const backendResult = await voiceAPI.processVoiceInput(voiceText, language);
+        if (backendResult.success) {
+          parsedExpense = {
+            amount: backendResult.data.amount,
+            description: backendResult.data.description,
+            category: backendResult.data.category,
+            isValid: true
+          };
+        } else {
+          throw new Error('Backend processing failed');
+        }
+      } catch (backendError) {
+        console.warn('Backend voice processing failed, using local fallback:', backendError);
+        // Fallback to local parsing
+        parsedExpense = parseVoiceInput(voiceText);
+      }
       
       if (!parsedExpense.isValid) {
         ttsService.voiceError('invalid_input');
@@ -110,7 +142,7 @@ const OverviewScreen = () => {
         amount: parsedExpense.amount,
         description: parsedExpense.description,
         category: parsedExpense.category,
-        voiceInput: voiceText
+        voice_input: voiceText
       });
 
       // Update total spent display
@@ -176,6 +208,12 @@ const OverviewScreen = () => {
         <View>
           <Text style={[styles.greeting, {color: text}]}>{t('welcomeback')},</Text>
           <Text style={[styles.name, {color: text}]}>{user.name}</Text>
+          {isLocalUser() && (
+            <View style={[styles.offlineIndicator, { backgroundColor: warning + '20', borderColor: warning }]}>
+              <MaterialCommunityIcons name="wifi-off" size={12} color={warning} />
+              <Text style={[styles.offlineText, { color: warning }]}>Offline Mode</Text>
+            </View>
+          )}
         </View>
         <TouchableOpacity
           style={[styles.aiButton, {backgroundColor: primary}]}
@@ -188,19 +226,9 @@ const OverviewScreen = () => {
       <Card style={styles.balanceCard}>
         <Text style={[styles.balanceLabel, {color: text}]}>{t('Total Spent')}</Text>
         <Text style={[styles.balanceAmount, {color: text}]}>{selectedCurrencySign}{totalSpent}</Text>
-        <Text style={[styles.trend, {color: success}]}>
-          ↑ {t('up')}
-        </Text>
-        <View style={styles.aiInsightBadge}>
-          <MaterialCommunityIcons
-            name="trending-up"
-            size={16}
-            color={success}
-          />
-          <Text style={[styles.aiInsightText, {color: success}]}>
-            {t('positivecashflow')}
-          </Text>
-        </View>
+
+
+
         
         {/* Real-time expense counter */}
         <View style={styles.expenseCounter}>
@@ -237,17 +265,41 @@ const OverviewScreen = () => {
               styles.aiAlert,
               {borderColor: warning},
             ]}>
-            <TextInput 
-            style={[styles.aiAlertText, {color: warning}]}
-            placeholder='Add Expenses...'
-            placeholderTextColor={warningLight}
-            />
+            <TouchableOpacity 
+              style={[styles.aiAlertText, {color: warning}]}
+              onPress={() => {
+                if (isLocalUser()) {
+                  Alert.alert(
+                    'Offline Mode',
+                    'You are currently in offline mode. Expenses will be saved locally only. Would you like to log in again to sync with the server?',
+                    [
+                      { text: 'Continue Offline', onPress: () => setAddExpenseModalVisible(true) },
+                      { text: 'Log In Again', onPress: () => navigation.navigate('Login') }
+                    ]
+                  );
+                } else {
+                  setAddExpenseModalVisible(true);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.aiAlertText, {color: warning}]}>
+                📝 Add Expenses...
+              </Text>
+            </TouchableOpacity>
             <VoiceRecorder
               onVoiceResult={handleVoiceInput}
               onError={handleVoiceError}
               iconSize={20}
+              style={styles.cameraButton}
             />
-            <TouchableOpacity style={styles.cameraButton}>
+            <TouchableOpacity 
+              style={styles.cameraButton}
+              onPress={() => {
+                // TODO: Implement camera functionality for expense scanning
+                Alert.alert('Camera Feature', 'Camera functionality coming soon!');
+              }}
+            >
               <MaterialCommunityIcons
                 name="google-lens"
                 size={20}
@@ -257,7 +309,23 @@ const OverviewScreen = () => {
           </View>
       </View>
 
-      <ExpenseList maxItems={3} />
+      <ExpenseList 
+        maxItems={3} 
+        onAddExpensePress={() => {
+          if (isLocalUser()) {
+            Alert.alert(
+              'Offline Mode',
+              'You are currently in offline mode. Expenses will be saved locally only. Would you like to log in again to sync with the server?',
+              [
+                { text: 'Continue Offline', onPress: () => setAddExpenseModalVisible(true) },
+                { text: 'Log In Again', onPress: () => navigation.navigate('Login') }
+              ]
+            );
+          } else {
+            setAddExpenseModalVisible(true);
+          }
+        }}
+      />
 
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, {color: text}]}>
@@ -284,8 +352,18 @@ const OverviewScreen = () => {
             <Text style={styles.actionButtonText}>{t('analyseoptions')}</Text>
           </TouchableOpacity>
         </Card>
-      </View>
-      </ScrollView>
+              </View>
+        
+        {/* Add Expense Modal */}
+        <AddExpenseModal
+          visible={addExpenseModalVisible}
+          onClose={() => setAddExpenseModalVisible(false)}
+          onExpenseAdded={(newExpense) => {
+            setLastAddedExpense(newExpense);
+            setShowNotification(true);
+          }}
+        />
+        </ScrollView>
     </View>
   );
 };
@@ -301,6 +379,21 @@ const styles = StyleSheet.create({
   },
   greeting: {fontSize: 16, opacity: 0.8},
   name: {fontSize: 24, fontWeight: 'bold', marginTop: 4},
+  offlineIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  offlineText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
   aiButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -358,7 +451,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: 16,
   },
-  aiAlertText: {flex: 1, fontSize: 14, fontWeight: '500'},
+  aiAlertText: {
+    flex: 1, 
+    fontSize: 14, 
+    fontWeight: '500',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 193, 7, 0.3)',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
   insightCard: {marginBottom: 16, borderLeftWidth: 4, paddingLeft: 12},
   insightHeader: {
     flexDirection: 'row',
@@ -380,6 +488,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 193, 7, 0.3)',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
 });
 

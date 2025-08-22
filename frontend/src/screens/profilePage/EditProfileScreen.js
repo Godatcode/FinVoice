@@ -1,10 +1,10 @@
 import React, { useContext, useEffect, useState } from "react";
 import { View, Text, StyleSheet, TextInput ,TouchableOpacity} from "react-native";
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useThemeColor } from "../../context/ThemeProvider";
 import { Card } from "../../components/Card";
 import { UserContext } from "../../context/UserContext";
+import { profileAPI } from "../../services/apiService";
 
 export default function EditProfileScreen() {
   const { primary , background , text, card} = useThemeColor();
@@ -19,30 +19,43 @@ export default function EditProfileScreen() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
-    const getUserData = async () => {
+    const getUserDataFromSupabase = async () => {
       try {
-        const storedEmail = await AsyncStorage.getItem('email');
-        const storedGender  = await AsyncStorage.getItem('gender')
-
-        if (storedEmail) setEmail(storedEmail);
-        if(storedGender) setGender(storedGender);
+        if (user && user.id) {
+          const profile = await profileAPI.getProfile();
+          if (profile) {
+            if (profile.email) setEmail(profile.email);
+            if (profile.gender) setGender(profile.gender);
+          }
+        }
       } catch (error) {
-        console.log('Error retrieving user data from AsyncStorage', error);
+        console.log('Error retrieving user data from Supabase', error);
       }
-      
     };
 
-    getUserData();
-  }, []);
+    getUserDataFromSupabase();
+  }, [user]);
 
   const handleNameBlur = async () => {
-    setUser({...user, name:name})
-    await AsyncStorage.setItem('name' , name)
+    try {
+      if (user && user.id) {
+        await profileAPI.updateProfile({ name });
+        setUser({...user, name: name});
+      }
+    } catch (error) {
+      console.log('Error saving name to Supabase', error);
+    }
   };
 
   const handleEmailBlur = async () => {
     setIsEditingEmail(false);
-    await AsyncStorage.setItem('email', email);
+    try {
+      if (user && user.id) {
+        await profileAPI.updateProfile({ email });
+      }
+    } catch (error) {
+      console.log('Error saving email to Supabase', error);
+    }
   };
 
   const handleGenderSelect = async (selectedGender) => {
@@ -50,9 +63,11 @@ export default function EditProfileScreen() {
     setIsDropdownOpen(false);
   
     try {
-      await AsyncStorage.setItem('gender', selectedGender);
+      if (user && user.id) {
+        await profileAPI.updateProfile({ gender: selectedGender });
+      }
     } catch (error) {
-      console.log('Error saving gender to AsyncStorage', error);
+      console.log('Error saving gender to Supabase', error);
     }
   };
 

@@ -7,7 +7,7 @@ import Invest from '../screens/overviewPage/Invest';
 import { LoginScreen,OverviewScreen,PayScreen,BudgetScreen,InsightsScreen,ProfileNavigator } from '../screens';
 import { useThemeColor } from '../context/ThemeProvider';
 import { useContext} from 'react';
-import { AuthContext, AuthProvider } from '../context/AuthContext';
+import { AuthContext } from '../context/AuthContext';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();

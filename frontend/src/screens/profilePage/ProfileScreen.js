@@ -37,7 +37,6 @@ const ProfileScreen = ({ navigation}) => {
         break;
       case 'theme':
         navigation.navigate('ThemeSettings');
-
         break;
       case 'language':
         navigation.navigate('LanguageSettings');

@@ -14,7 +14,7 @@ import { useExpenses } from '../context/ExpenseContext';
 import EditExpenseModal from './EditExpenseModal';
 import ttsService from '../services/TTSService';
 
-const ExpenseList = ({ maxItems = 5, onExpensePress }) => {
+const ExpenseList = ({ maxItems = 5, onExpensePress, onAddExpensePress }) => {
   const { expenses, defaultCategories, selectedCurrencySign, updateExpense, deleteExpense, getCategoryInfo, formatExpenseDate } = useExpenses();
   const { text, background, primary, secondary, card, error, success } = useThemeColor();
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -78,8 +78,16 @@ const ExpenseList = ({ maxItems = 5, onExpensePress }) => {
               No expenses yet
             </Text>
             <Text style={[styles.emptySubtitle, { color: secondary }]}>
-              Use voice input to add your first expense
+              Use voice input or tap the button below to add your first expense
             </Text>
+            <TouchableOpacity
+              style={[styles.emptyAddButton, { backgroundColor: primary }]}
+              onPress={() => onAddExpensePress && onAddExpensePress()}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="plus" size={20} color="white" />
+              <Text style={[styles.emptyAddButtonText, { color: 'white' }]}>Add Expense</Text>
+            </TouchableOpacity>
           </View>
         </Card>
       </View>
@@ -90,9 +98,19 @@ const ExpenseList = ({ maxItems = 5, onExpensePress }) => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: text }]}>Recent Expenses</Text>
-        <TouchableOpacity>
-          <Text style={[styles.viewAll, { color: primary }]}>View All</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: primary }]}
+            onPress={() => onAddExpensePress && onAddExpensePress()}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="plus" size={20} color="white" />
+            <Text style={[styles.addButtonText, { color: 'white' }]}>Add</Text>
+          </TouchableOpacity>
+          <TouchableOpacity>
+            <Text style={[styles.viewAll, { color: primary }]}>View All</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       
       <ScrollView 
@@ -172,6 +190,7 @@ const ExpenseList = ({ maxItems = 5, onExpensePress }) => {
         onClose={() => setEditModalVisible(false)}
         onSave={handleSaveExpense}
       />
+      
     </View>
   );
 };
@@ -190,6 +209,28 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: 'bold',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  addButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   viewAll: {
     fontSize: 14,
@@ -284,6 +325,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 16,
+  },
+  emptyAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    gap: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+  },
+  emptyAddButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

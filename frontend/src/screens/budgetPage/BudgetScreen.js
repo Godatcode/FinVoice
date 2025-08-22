@@ -1,29 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, Dimensions, TextInput, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useContext } from 'react';
+import { StyleSheet, View, Text, ScrollView, Dimensions, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { BarChart } from 'react-native-chart-kit';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import ttsService from '../../services/TTSService';
-
-const BUDGET_STORAGE_KEY = 'userBudgetData';
-
 import { useThemeColor } from '../../context/ThemeProvider';
 import { useCurrency } from '../../context/CurrencyContext';
 import { useTranslation } from 'react-i18next';
+import { budgetAPI } from '../../services/apiService';
+import { UserContext } from '../../context/UserContext';
+
+const BUDGET_STORAGE_KEY = 'userBudgetData';
 
 export default function BudgetScreen() {
   const { t } = useTranslation();
+  const { user } = useContext(UserContext);
 
   const initialBudget = {
-    total: '5000.00',
-    spent: '3240.50',
+    total: '',
+    spent: '0.00',
     categories: [
-      { name: 'foodDining', budgeted: '1200.00', spent: '900.00' },
-      { name: 'transportation', budgeted: '600.00', spent: '350.00' },
-      { name: 'entertainment', budgeted: '1600.00', spent: '500.00' },
-      { name: 'utilities', budgeted: '400.00', spent: '300.00' },
-      { name: 'shopping', budgeted: '800.00', spent: '550.00' },
+      { name: 'foodDining', budgeted: '', spent: '0.00' },
+      { name: 'transportation', budgeted: '', spent: '0.00' },
+      { name: 'entertainment', budgeted: '', spent: '0.00' },
+      { name: 'utilities', budgeted: '', spent: '0.00' },
+      { name: 'shopping', budgeted: '', spent: '0.00' },
     ],
   };
 
@@ -69,10 +70,42 @@ export default function BudgetScreen() {
 
   const loadBudget = async () => {
     try {
-      const storedBudget = await AsyncStorage.getItem(BUDGET_STORAGE_KEY);
-      if (storedBudget) {
-        setBudgetData(JSON.parse(storedBudget));
+      if (user && user.id && !user.id.startsWith('local_')) {
+        // Only load from backend if user has a real Supabase ID
+        try {
+          const storedBudget = await budgetAPI.getAll();
+          if (storedBudget && storedBudget.length > 0) {
+            // Get the most recent budget
+            const latestBudget = storedBudget[0];
+            
+            // Convert backend format to frontend format
+            const categories = [];
+            if (latestBudget.categories && typeof latestBudget.categories === 'object') {
+              Object.keys(latestBudget.categories).forEach(catName => {
+                const catData = latestBudget.categories[catName];
+                categories.push({
+                  name: catName,
+                  budgeted: catData.budgeted?.toString() || '0.00',
+                  spent: catData.spent?.toString() || '0.00'
+                });
+              });
+            }
+            
+            setBudgetData({
+              total: latestBudget.total_amount?.toString() || '5000.00',
+              spent: categories.reduce((sum, cat) => sum + parseFloat(cat.spent || 0), 0).toString(),
+              categories: categories.length > 0 ? categories : initialBudget.categories
+            });
+          } else {
+            setBudgetData(initialBudget);
+          }
+        } catch (backendError) {
+          console.error('Error loading budget from backend:', backendError);
+          setBudgetData(initialBudget);
+        }
       } else {
+        // For local users, just use initial budget
+        console.log('💾 Using local budget data (user has local session)');
         setBudgetData(initialBudget);
       }
     } catch (error) {
@@ -83,9 +116,38 @@ export default function BudgetScreen() {
 
   const saveBudget = async (data) => {
     try {
-      await AsyncStorage.setItem(BUDGET_STORAGE_KEY, JSON.stringify(data));
+      if (user && user.id && !user.id.startsWith('local_')) {
+        // Only save to backend if user has a real Supabase ID
+        const currentDate = new Date();
+        const monthYear = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+        
+        await budgetAPI.create({
+          month_year: monthYear,
+          total_amount: parseFloat(data.total) || 0,
+          categories: data.categories.reduce((acc, cat) => {
+            acc[cat.name] = {
+              budgeted: parseFloat(cat.budgeted) || 0,
+              spent: parseFloat(cat.spent) || 0
+            };
+            return acc;
+          }, {})
+        });
+        
+        console.log('✅ Budget saved to backend successfully');
+      } else {
+        // For local users, just show success (data is already in state)
+        console.log('💾 Budget saved locally (user has local session)');
+      }
     } catch (error) {
       console.error('Error saving budget:', error);
+      
+      // If it's a network/backend error, still continue
+      if (error.message.includes('Network') || error.message.includes('HTTP')) {
+        console.log('💾 Backend unavailable, budget saved locally');
+        return; // Don't throw error for network issues
+      }
+      
+      throw error;
     }
   };
 
@@ -106,16 +168,45 @@ export default function BudgetScreen() {
   const handleCategorySpentChange = (index, newSpent) => {
     const updatedCategories = [...budgetData.categories];
     updatedCategories[index].spent = newSpent;
-    setBudgetData(prev => ({ ...prev, categories: updatedCategories }));
+    
+    // Calculate total spent from all categories
+    const totalSpent = updatedCategories.reduce((sum, cat) => sum + parseFloat(cat.spent || 0), 0);
+    
+    setBudgetData(prev => ({ 
+      ...prev, 
+      categories: updatedCategories,
+      spent: totalSpent.toFixed(2)
+    }));
   };
 
   const handleSaveBudget = async () => {
-    saveBudget(budgetData);
-    
-    // TTS feedback
-    await ttsService.speak('Budget saved successfully. Navigating to insights.');
-    
-    navigation.navigate('Insights', { budgetData });
+    try {
+      // Validate budget data
+      if (!budgetData.total || parseFloat(budgetData.total) <= 0) {
+        Alert.alert('Error', 'Please enter a valid total budget amount.');
+        return;
+      }
+
+      // Check if at least one category has a budget
+      const hasCategoryBudget = budgetData.categories.some(cat => 
+        cat.budgeted && parseFloat(cat.budgeted) > 0
+      );
+
+      if (!hasCategoryBudget) {
+        Alert.alert('Error', 'Please set budgets for at least one category.');
+        return;
+      }
+
+      await saveBudget(budgetData);
+      
+      // TTS feedback
+      await ttsService.speak('Budget saved successfully. Navigating to insights.');
+      
+      navigation.navigate('Insights', { budgetData });
+    } catch (error) {
+      console.error('Error saving budget:', error);
+      Alert.alert('Error', 'Failed to save budget. Please try again.');
+    }
   };
 
   return (
@@ -141,7 +232,7 @@ export default function BudgetScreen() {
             <View style={styles.summaryItem}>
               <Text style={[styles.summaryLabel, { color: secondary }]}>{t('spentLabel')}</Text>
               <TextInput
-                style={[styles.summaryInput, { color: text }]}
+                style={[styles.summarySpentInput, { color: text }]}
                 value={budgetData.spent}
                 onChangeText={handleSpentChange}
                 keyboardType="numeric"
@@ -204,7 +295,7 @@ export default function BudgetScreen() {
                   <TextInput
                     style={[styles.categorySpentInput, { color: text }]}
                     value={category.spent}
-                    onChangeText={(newSpent) => handleCategorySpentChange(index, newSpent)}
+                    editable={false}
                     keyboardType="numeric"
                   />
                 </View>
@@ -272,6 +363,15 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     width: 90,
   },
+  summarySpentInput: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    borderBottomWidth: 1,
+    borderColor: '#ccc',
+    paddingVertical: 4,
+    width: 90,
+  },
   summaryAmount: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -298,7 +398,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     padding: 16,
     borderRadius: 10,
-    backgroundColor: '#333'},
+    backgroundColor: '#333',
+  },
 
   categoryHeader: {
     flexDirection: 'row',

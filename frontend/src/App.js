@@ -12,21 +12,21 @@ import { ExpenseProvider } from './context/ExpenseContext';
 export default function App() {
   return (
     <AuthProvider>
-      <LanguageProvider>
-        <I18nextProvider i18n={i18n}>
-          <ProfileSettingsProvider>
-            <ThemeProvider>
-              <UserProvider>
+      <UserProvider>
+        <LanguageProvider>
+          <I18nextProvider i18n={i18n}>
+            <ProfileSettingsProvider>
+              <ThemeProvider>
                 <CurrencyProvider>
                   <ExpenseProvider>
                     <AppNavigator />
                   </ExpenseProvider>
                 </CurrencyProvider> 
-              </UserProvider>
-            </ThemeProvider>
-          </ProfileSettingsProvider>
+              </ThemeProvider>
+            </ProfileSettingsProvider>
           </I18nextProvider>  
-      </LanguageProvider> 
-    </AuthProvider> 
-);
+        </LanguageProvider>
+      </UserProvider>
+    </AuthProvider>
+  );
 }
