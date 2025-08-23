@@ -11,7 +11,7 @@ console.log('  - GOOGLE_CLOUD_STT_API_KEY:', GOOGLE_CLOUD_STT_API_KEY ? '✅ Loa
 export const API_CONFIG = {
   // Backend API Configuration
   // All data operations go through the backend server
-  BACKEND_URL: 'http://20.20.11.235:5001', // Your actual IP address (updated port)
+  BACKEND_URL: 'https://finvoice-backend-vw3t.onrender.com', 
   
   // Google Cloud Speech-to-Text API Key (for voice features)
   GOOGLE_CLOUD_STT_API_KEY: GOOGLE_CLOUD_STT_API_KEY,
